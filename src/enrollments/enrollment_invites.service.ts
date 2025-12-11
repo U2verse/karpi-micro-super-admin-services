@@ -103,9 +103,14 @@ export class EnrollmentInvitesService {
     // -----------------------------------------------------
     // 2️⃣ Create Auth User
     // -----------------------------------------------------
+    type RegisterResponse = {
+      user_id: number;
+    };
+
     let authUserId: number | null = null;
+
     try {
-      const authRes = await axios.post(`${AUTH_API}/register`,  {
+      const authRes = await axios.post<RegisterResponse>(`${AUTH_API}/register`, {
         name: owner_name,
         email: contact_email,
         phone,
@@ -113,7 +118,7 @@ export class EnrollmentInvitesService {
         password: Math.random().toString(36).slice(2, 10),
         tenant_id: null,
       });
-      
+
       authUserId = authRes.data.user_id;
 
       console.log("✅ Auth user created authUserId :", authUserId);
@@ -122,26 +127,43 @@ export class EnrollmentInvitesService {
       console.error("❌ Auth user creation failed:", e.message);
     }
 
+
     // -----------------------------------------------------
     // 3️⃣ Create Client
     // -----------------------------------------------------
-    const clientRes = await axios.post(`${CLIENT_API}/clients`, {
-      name: academy_name,
-      subdomain: subdomain,
-      domain_type: "subdomain",
-      plan: plan_id?.toString(),
-      logo_url: null,
-      theme_color: null
-    }, {
-      headers: {
-        "x-internal-secret": process.env.INTERNAL_ADMIN_TOKEN
+    interface CreateClientResponse {
+      client: {
+        client_id: number;
+        name: string;
+        subdomain: string;
+        primary_domain: string;
+      };
+      domain: any;
+      primary_domain: string;
+      message: string;
+    }
+
+    const clientRes = await axios.post<CreateClientResponse>(
+      `${CLIENT_API}/clients`,
+      {
+        name: academy_name,
+        subdomain,
+        domain_type: "subdomain",
+        plan: plan_id?.toString(),
+        logo_url: null,
+        theme_color: null,
+      },
+      {
+        headers: {
+          "x-internal-secret": process.env.INTERNAL_ADMIN_TOKEN!
+        }
       }
-    });
+    );
 
     const client_id = clientRes.data.client.client_id;
     console.log("✅ Client created with ID:", client_id);
 
-    // Update user tenant
+    // Update user tenant_id
     if (authUserId) {
       try {
         await axios.post(`${AUTH_API}/update-user/${authUserId}`, {
@@ -207,7 +229,20 @@ export class EnrollmentInvitesService {
     // -----------------------------------------------------
     // 9️⃣ Assign Plan
     // -----------------------------------------------------
-    const subscriptionRes = await axios.post(`${SUPERADMIN_API}/subscriptions/assign`,
+    interface SubscriptionAssignResponse {
+      id: number;
+      client_id: number;
+      plan_id: number;
+      start_date: string;
+      end_date: string;
+      renew_type: string;
+      active: boolean;
+      upgraded_from: number | null;
+      created_at: string;
+    }
+
+    const subscriptionRes = await axios.post<SubscriptionAssignResponse>(
+      `${SUPERADMIN_API}/subscriptions/assign`,
       {
         client_id,
         plan_id,
@@ -215,13 +250,14 @@ export class EnrollmentInvitesService {
       },
       {
         headers: {
-          "x-internal-secret": process.env.SUPER_ADMIN_INTERNAL_ADMIN_TOKEN
-        }
+          "x-internal-secret": process.env.SUPER_ADMIN_INTERNAL_ADMIN_TOKEN!,
+        },
       }
     );
-    
+
     const subscription_id = subscriptionRes.data.id;
     console.log("✅ Subscription assigned with ID:", subscription_id);
+
 
     // -----------------------------------------------------
     // 🔟 Save basic enrollment record
