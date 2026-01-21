@@ -1,154 +1,314 @@
 <!DOCTYPE html>
-<html lang="en" style="margin: 0; padding: 0; font-family: 'Inter', sans-serif;">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Invoice | Karpi</title>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Registration Completed | Karpi</title>
 
-    <style>
-      body {
-        margin: 0;
-        padding: 0;
-        background: #f5f7fa;
-        font-family: "Inter", sans-serif;
-      }
+<style>
+ body {
+  margin: 0;
+  padding: 0;
+  font-family: "Inter", sans-serif;
+  background: linear-gradient(180deg, #EFF6FF, #DBEAFE);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: hidden;
+}
 
-      .container {
-        max-width: 650px;
-        margin: 40px auto;
-        background: #ffffff;
-        border-radius: 14px;
-        overflow: hidden;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-      }
+/* CONTAINER */
+.container {
+  max-width: 1080px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 20px 32px;
+  text-align: center;
+  position: relative;
+}
 
-      .header {
-        background: linear-gradient(135deg, #4f46e5, #6366f1);
-        padding: 35px;
-        text-align: center;
-        color: #ffffff;
-      }
+/* CARD */
+.card {
+  background: #ffffff;
+  border-radius: 28px;
+  padding: 42px 44px;
+  box-shadow: 0 30px 60px rgba(0,0,0,0.12);
+}
 
-      .header h1 {
-        margin: 0;
-        font-size: 26px;
-        font-weight: 600;
-      }
+/* LOGO INSIDE CARD */
+.card-logo {
+  margin-bottom: 18px;
+}
 
-      .section {
-        padding: 30px;
-      }
+.card-logo img {
+  height: 48px;
+}
 
-      .title {
-        font-size: 20px;
-        font-weight: 600;
-        color: #111827;
-        margin-bottom: 16px;
-      }
+/* TEXT */
+.title {
+  font-size: 32px;
+  font-weight: 800;
+  color: #1E40AF;
+  margin-bottom: 12px;
+}
 
-      .text {
-        font-size: 15px;
-        line-height: 1.6;
-        color: #374151;
-      }
+.subtitle {
+  font-size: 17px;
+  color: #4b5563;
+  margin-bottom: 30px;
+  line-height: 1.7;
+}
 
-      .invoice-box {
-        margin-top: 24px;
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        padding: 20px;
-        background: #fafafa;
-      }
+/* INFO BOX */
+.info {
+  background: #EFF6FF;
+  border-radius: 18px;
+  padding: 26px;
+  margin-bottom: 28px;
+  text-align: left;
+  font-size: 16px;
+}
 
-      .invoice-row {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 10px;
-        font-size: 15px;
-        color: #111827;
-      }
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px dashed #BFDBFE;
+}
 
-      .invoice-row span:first-child {
-        font-weight: 500;
-      }
+.info-row:last-child {
+  border-bottom: none;
+}
 
-      .cta-button {
-        display: inline-block;
-        width: 100%;
-        text-align: center;
-        padding: 14px 0;
-        margin-top: 26px;
-        font-size: 16px;
-        font-weight: 600;
-        background: #4f46e5;
-        color: #ffffff !important;
-        border-radius: 8px;
-        text-decoration: none;
-      }
+.info-row span:first-child {
+  color: #1E40AF;
+  font-weight: 600;
+}
 
-      .footer {
-        text-align: center;
-        font-size: 13px;
-        color: #6b7280;
-        padding: 20px;
-        margin-top: 10px;
-      }
-    </style>
-  </head>
+.info-row span:last-child {
+  font-weight: 700;
+  color: #1E3A8A;
+}
 
-  <body>
-    <div class="container">
-      <!-- HEADER -->
-      <div class="header">
-        <h1>🎉 Your Enrollment is Complete!</h1>
-        <p style="font-size: 16px; margin-top: 8px; opacity: 0.85">
-          Welcome to Karpi — Let’s Build Your Academy
-        </p>
-      </div>
+/* CTA BUTTON */
+.cta-btn {
+  display: inline-block;
+  margin: 6px 0 28px;
+  padding: 16px 36px;
+  background: linear-gradient(135deg, #2563EB, #1E40AF);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 999px;
+  text-decoration: none;
+  box-shadow: 0 12px 26px rgba(37,99,235,0.45);
+}
 
-      <!-- BODY -->
-      <div class="section">
-        <div class="title">Hi {{NAME}},</div>
-        <p class="text">
-          Thank you for completing the enrollment process. Your academy has been
-          successfully registered and is now active on Karpi.  
-          Below is your invoice and account information for your reference.
-        </p>
+.cta-btn:hover {
+  opacity: 0.95;
+}
 
-        <!-- INVOICE BOX -->
-        <div class="invoice-box">
-          <div class="invoice-row"><span>Invoice ID:</span> <span>#INV{{INVOICE_ID}}</span></div>
-          <div class="invoice-row"><span>Client ID:</span> <span>{{CLIENT_ID}}</span></div>
-          <div class="invoice-row"><span>Academy Name:</span> <span>{{ACADEMY}}</span></div>
-          <div class="invoice-row"><span>Plan:</span> <span>{{PLAN}}</span></div>
-          <div class="invoice-row"><span>Amount Paid:</span> <span>₹{{AMOUNT}}</span></div>
-          <div class="invoice-row"><span>Payment Date:</span> <span>{{DATE}}</span></div>
-        </div>
+/* NOTES */
+.notes {
+  background: linear-gradient(180deg, #EFF6FF, #DBEAFE);
+  border-radius: 18px;
+  padding: 26px;
+  text-align: left;
+  font-size: 15.5px;
+  line-height: 1.8;
+  margin-bottom: 26px;
+}
 
-        <!-- CTA -->
-        <a
-          class="cta-button"
-          href="https://{{SUBDOMAIN}}.karpi.com"
-          target="_blank"
-        >
-          🚀 Go to Your Academy Dashboard
-        </a>
+.notes b {
+  color: #2563EB;
+}
 
-        <a
-          class="cta-button"
-          style="background: #111827; margin-top: 12px"
-          href="{{INVOICE_DOWNLOAD_LINK}}"
-          target="_blank"
-        >
-          🧾 Download Invoice PDF
-        </a>
-      </div>
+/* SETUP LINK */
+.setup-link {
+  margin-top: 18px;
+  font-size: 16px;
+}
 
-      <!-- FOOTER -->
-      <div class="footer">
-        © {{YEAR}} Karpi LMS. All rights reserved.  
-        <br />
-        Need help? Contact us at support@karpi.com
-      </div>
+.setup-link a {
+  color: #2563EB;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.setup-link a:hover {
+  text-decoration: underline;
+}
+
+/* FOOTER */
+.footer {
+  margin-top: 28px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+/* CONFETTI */
+.confetti {
+  position: fixed;
+  top: -10px;
+  width: 8px;
+  height: 14px;
+  opacity: 0.9;
+  animation: fall 3s linear forwards;
+}
+
+@keyframes fall {
+  to {
+    transform: translateY(110vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* MOBILE */
+@media (max-width: 768px) {
+
+  body {
+    align-items: flex-start;
+  }
+
+  .container {
+    padding: 28px 16px;
+  }
+
+  .card {
+    padding: 26px 20px;
+    border-radius: 22px;
+  }
+
+  .card-logo img {
+    height: 42px;
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .subtitle {
+    font-size: 15.5px;
+  }
+
+  .info {
+    padding: 18px;
+    font-size: 15px;
+  }
+
+  .info-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .notes {
+    padding: 18px;
+    font-size: 14.5px;
+  }
+
+  .footer {
+    font-size: 13px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <!-- CARD -->
+  <div class="card">
+
+    <!-- LOGO INSIDE CARD -->
+    <div class="card-logo">
+      <img src="karpi-logo.png" alt="Karpi Logo">
     </div>
-  </body>
+
+    <div class="title">🎉 Registration Completed!</div>
+    <div class="subtitle">
+      Welcome to Karpi, {{NAME}} 👋<br />
+      Your enrollment and payment have been successfully completed.
+    </div>
+
+    <!-- INFO -->
+    <div class="info">
+      <div class="info-row"><span>Invoice ID</span><span>#INV{{INVOICE_ID}}</span></div>
+      <div class="info-row"><span>Client ID</span><span>{{CLIENT_ID}}</span></div>
+      <div class="info-row"><span>Academy</span><span>{{ACADEMY}}</span></div>
+      <div class="info-row"><span>Plan</span><span>{{PLAN}}</span></div>
+      <div class="info-row"><span>Amount Paid</span><span>₹{{AMOUNT}}</span></div>
+      <div class="info-row"><span>Date</span><span>{{DATE}}</span></div>
+    </div>
+
+    <!-- CTA -->
+    <a class="cta-btn" href="https://{{SUBDOMAIN}}.karpi.com" target="_blank">
+      🚀 Access Your Academy App
+    </a>
+
+    <!-- NOTES -->
+    <div class="notes">
+      <b>What happens next?</b><br><br>
+
+      📧 You will receive the following emails shortly:
+      <ul>
+        <li>Payment Invoice</li>
+        <li>Registration Confirmation</li>
+        <li>Welcome Email</li>
+        <li>Login Credentials</li>
+      </ul>
+
+      🔐 Use the <b>Academy App link above</b> and log in using the
+      <b>credentials shared via email</b>.
+
+      <br><br>
+
+      If you don’t see the emails, check your <b>Spam / Junk</b> folder and mark them as
+      <b>“Not Spam”</b>.
+
+      <br><br>
+
+      📱 You will receive a <b>WhatsApp confirmation message</b>.
+      Please click <b>OK / YES</b> to continue receiving important updates.
+
+      <br><br>
+
+      ⏳ Your account is being finalized and may take a few minutes to complete.
+    </div>
+
+    <!-- SETUP LINK -->
+    <div class="setup-link">
+      👉 <a href="#" onclick="alert('Setup video will open here')">
+        How to set up your academy (Watch Video)
+      </a>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    © {{YEAR}} Karpi LMS · Powered by Karpi
+  </div>
+
+</div>
+
+<!-- CONFETTI SCRIPT -->
+<script>
+  window.onload = function () {
+    for (let i = 0; i < 80; i++) {
+      const confetti = document.createElement("div");
+      confetti.className = "confetti";
+      confetti.style.left = Math.random() * 100 + "vw";
+      confetti.style.background =
+        ["#2563EB", "#1E40AF", "#60A5FA", "#BFDBFE"][
+          Math.floor(Math.random() * 4)
+        ];
+      confetti.style.animationDuration = 2 + Math.random() * 2 + "s";
+      document.body.appendChild(confetti);
+
+      setTimeout(() => confetti.remove(), 4000);
+    }
+  };
+</script>
+
+</body>
 </html>

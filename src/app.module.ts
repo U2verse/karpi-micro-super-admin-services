@@ -13,6 +13,8 @@ import { OverridesModule } from './overrides/overrides.module';
 import { StatusLogsModule } from './status-logs/status-logs.module';
 import { UsageModule } from './usage/usage.module';
 import { EnrollmentInvitesModule } from "./enrollments/enrollment_invites.module";
+import { PaymentsModule } from './payments/payments.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { EnrollmentInvitesModule } from "./enrollments/enrollment_invites.module
     StatusLogsModule,
     UsageModule,
     EnrollmentInvitesModule,
+    PaymentsModule,
+    WhatsappModule,
   ],
 })
 export class AppModule {}

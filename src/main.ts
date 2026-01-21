@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { transporter } from './enrollments/email';  // ✅ IMPORT HERE
+import { Logger } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -27,6 +28,11 @@ async function bootstrap() {
     }
   });
 
-  await app.listen(process.env.PORT || 3004);
+  
+
+  const port = process.env.APP_PORT || 4102;
+  await app.listen(port);
+
+  Logger.log(`Super Admin Service running on port ${port}`, 'Bootstrap');
 }
 bootstrap();

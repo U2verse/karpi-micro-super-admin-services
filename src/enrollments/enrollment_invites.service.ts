@@ -3,7 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { EnrollmentInvite } from "./enrollment_invite.entity";
 import { CreateEnrollmentInviteDto } from "./dto/create-enrollment-invite.dto";
-import { randomBytes } from "crypto";
+import { randomBytes, UUID } from "crypto";
 import { SubmitEnrollmentDto } from "./dto/submit-enrollment.dto";
 import { DataSource } from "typeorm";
 import axios from "axios";
@@ -13,6 +13,7 @@ import * as path from "path";
 import * as nodemailer from "nodemailer";
 import { generateInvoicePDF } from "../utils/generate-invoice";
 import { sendInvoiceEmail } from "../utils/send-invoice-email";
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 
 
 
@@ -22,6 +23,7 @@ export class EnrollmentInvitesService {
     @InjectRepository(EnrollmentInvite)
     private inviteRepo: Repository<EnrollmentInvite>,
     private dataSource: DataSource,
+    private whatsappService: WhatsappService,
   ) {}
 
   // -------------------------------------------------
@@ -54,7 +56,11 @@ export class EnrollmentInvitesService {
     await this.sendEmail(email, clientName, link);
 
     if (whatsapp) {
-      await this.sendWhatsApp(whatsapp, link);
+      await this.whatsappService.sendEnrollmentMessage(
+        whatsapp,     // 91XXXXXXXXXX
+        clientName,   // {{1}}
+        token,        // {{2}}
+      );
     }
 
     return {
@@ -95,13 +101,43 @@ export class EnrollmentInvitesService {
     if (invite.completed)
       throw new BadRequestException("This enrollment is already completed.");
 
-    const CLIENT_API = process.env.CLIENTS_SERVICE_URL!;
-    const AUTH_API = process.env.AUTH_SERVICE_URL!;
-    const SUPERADMIN_API =
-      process.env.SUPERADMIN_SERVICE_URL ?? "http://localhost:3004/api";
+    const GATEWAY = process.env.API_GATEWAY_INTERNAL_URL!;
+
+    const CLIENT_API = `${GATEWAY}/api/clients`;
+    const AUTH_API = `${GATEWAY}/api/auth`;
+    const SUPERADMIN_API = `${GATEWAY}/api/superadmin`;
 
     // -----------------------------------------------------
-    // 2️⃣ Create Auth User
+    // 2️⃣ Fetch Plan Details
+    // -----------------------------------------------------
+    const plan = await this.dataSource.query(
+      `
+      SELECT
+        storage_limit_mb,
+        student_limit,
+        course_limit,
+        video_limit,
+        assignments_limit
+      FROM plans
+      WHERE id = $1
+      `,
+      [plan_id]
+    );
+
+    if (!plan || plan.length === 0) {
+      throw new BadRequestException("Invalid plan selected");
+    }
+
+    const {
+      storage_limit_mb,
+      student_limit,
+      course_limit,
+      video_limit,
+      assignments_limit,
+    } = plan[0];
+
+    // -----------------------------------------------------
+    // 3️⃣ Create Auth User
     // -----------------------------------------------------
     type RegisterResponse = {
       user_id: number;
@@ -110,30 +146,45 @@ export class EnrollmentInvitesService {
     let authUserId: number | null = null;
 
     try {
-      const authRes = await axios.post<RegisterResponse>(`${AUTH_API}/register`, {
-        name: owner_name,
-        email: contact_email,
-        phone,
-        role: "clientadmin",
-        password: Math.random().toString(36).slice(2, 10),
-        tenant_id: null,
-      });
+      const authRes = await axios.post<RegisterResponse>(
+        `${AUTH_API}/register`,
+        {
+          name: owner_name,
+          email: contact_email,
+          phone,
+          role: "clientadmin",
+          password: Math.random().toString(36).slice(2, 10),
+          tenant_id: null,
+        },
+        {
+          headers: {
+            "x-internal-secret": process.env.INTERNAL_ADMIN_TOKEN!,
+          },
+        }
+      );
 
       authUserId = authRes.data.user_id;
 
-      console.log("✅ Auth user created authUserId :", authUserId);
+      console.log("✅ Auth user created authUserId:", authUserId);
 
     } catch (e: any) {
-      console.error("❌ Auth user creation failed:", e.message);
+      console.error(
+        "❌ Auth user creation failed:",
+        e?.response?.data || e.message
+      );
+
+      throw new BadRequestException(
+        'Enrollment failed: unable to create auth user'
+      );
     }
 
-
     // -----------------------------------------------------
-    // 3️⃣ Create Client
+    // 4️⃣ Create Client
     // -----------------------------------------------------
     interface CreateClientResponse {
       client: {
         client_id: number;
+        tenant_id: string;
         name: string;
         subdomain: string;
         primary_domain: string;
@@ -143,91 +194,307 @@ export class EnrollmentInvitesService {
       message: string;
     }
 
-    const clientRes = await axios.post<CreateClientResponse>(
-      `${CLIENT_API}/clients`,
-      {
-        name: academy_name,
-        subdomain,
-        domain_type: "subdomain",
-        plan: plan_id?.toString(),
-        logo_url: null,
-        theme_color: null,
-      },
-      {
-        headers: {
-          "x-internal-secret": process.env.INTERNAL_ADMIN_TOKEN!
+    let client_id: number;
+    let tenant_id: string;
+
+    try {
+      const clientRes = await axios.post<CreateClientResponse>(
+        `${CLIENT_API}/clients`,
+        {
+          name: academy_name,
+          subdomain,
+          domain_type: "subdomain",
+          plan: plan_id?.toString(),
+          logo_url: null,
+          theme_color: null,
+        },
+        {
+          headers: {
+            "x-internal-secret": process.env.INTERNAL_ADMIN_TOKEN!,
+          },
         }
-      }
-    );
+      );
 
-    const client_id = clientRes.data.client.client_id;
-    console.log("✅ Client created with ID:", client_id);
+      client_id = clientRes.data.client.client_id;
+      tenant_id = clientRes.data.client.tenant_id;
 
-    // Update user tenant_id
-    if (authUserId) {
-      try {
-        await axios.post(`${AUTH_API}/update-user/${authUserId}`, {
-          tenant_id: client_id,
-        });
-        console.log("✅ User tenant_id updated");
-      } catch {
-        console.error("❌ Failed to update user tenant_id");
-      }
+      console.log("✅ Client created with ID:", client_id);
+      console.log("✅ Tenant ID:", tenant_id);
+
+    } catch (e: any) {
+      console.error(
+        "❌ Client creation failed:",
+        e?.response?.data || e.message
+      );
+
+      // 🔥 COMPENSATION: auth user already exists
+      await axios.delete(
+        `${AUTH_API}/users/${authUserId}`,
+        {
+          headers: { "x-internal-secret": process.env.INTERNAL_ADMIN_TOKEN! },
+        }
+      );
+
+      throw new BadRequestException(
+        "Enrollment failed: unable to create client"
+      );
     }
 
     // -----------------------------------------------------
-    // 5️⃣ Profile
+    // 5️⃣ Update user tenant_id
     // -----------------------------------------------------
-    await axios.post(`${CLIENT_API}/clients/${client_id}/profile`, {
-      academy_name,
-      owner_name,
-      contact_email,
-      phone,
-      address: `${address_line1}, ${address_line2 ?? ""}`,
-      city,
-      state,
-      pincode,
-    });
-    console.log("✅ Client profile created");
+    try {
+      await axios.post(
+        `${AUTH_API}/update-user/${authUserId}`,
+        { tenant_id },
+        {
+          headers: {
+            "x-internal-secret": process.env.INTERNAL_ADMIN_TOKEN!,
+          },
+        }
+      );
+
+      console.log("✅ User tenant_id updated");
+
+    } catch (e: any) {
+      console.error(
+        "❌ Failed to update user tenant_id:",
+        e?.response?.data || e.message
+      );
+
+      // 🔥 COMPENSATION (reverse order)
+      await axios.delete(`${CLIENT_API}/clients/${client_id}`, {
+        headers: { "x-internal-secret": process.env.INTERNAL_ADMIN_TOKEN! },
+      });
+
+      await axios.delete(`${AUTH_API}/users/${authUserId}`, {
+        headers: { "x-internal-secret": process.env.INTERNAL_ADMIN_TOKEN! },
+      });
+
+      throw new BadRequestException(
+        "Enrollment failed: unable to link user to client"
+      );
+    }
 
     // -----------------------------------------------------
-    // 6️⃣ Settings
+    // 5️⃣ Initialize Client Usage
     // -----------------------------------------------------
-    await axios.patch(`${CLIENT_API}/clients/${client_id}/settings`,
-      {
-        enable_chat: true,
-        enable_notifications: true,
-        enable_payment: true,
-        enable_landing_page: true,
-      }
-    );
-    console.log("✅ Client settings updated");
+    try {
+      await axios.post(
+        `${CLIENT_API}/clients/${client_id}/usage/init`,
+        {
+          storage_limit_mb,
+          student_limit,      // ⚠️ ensure correct variable name
+          course_limit,
+          video_limit,
+          assignments_limit,
+        },
+        {
+          headers: {
+            'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN!,
+          },
+        }
+      );
+
+      console.log('✅ Client usage initialized via clients-service');
+
+    } catch (e: any) {
+      console.error(
+        '❌ Client usage initialization failed:',
+        e?.response?.data || e.message
+      );
+
+      // 🔥 COMPENSATION (reverse order)
+      await axios.delete(`${CLIENT_API}/clients/${client_id}`, {
+        headers: { 'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN! },
+      });
+
+      await axios.delete(`${AUTH_API}/users/${authUserId}`, {
+        headers: { 'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN! },
+      });
+
+      throw new BadRequestException(
+        'Enrollment failed: unable to initialize client usage'
+      );
+    }
+
+
 
     // -----------------------------------------------------
-    // 7️⃣ Branding
+    // 6️⃣ Client Profile
     // -----------------------------------------------------
-    await axios.patch(`${CLIENT_API}/clients/${client_id}/branding`, {
-      client_id,
-      theme_color: "#4F46E5",
-      primary_color: "#4F46E5",
-      secondary_color: "#818CF8",
-      theme_mode: "light",
-      font_family: "Inter",
-    });
-    console.log("✅ Client branding set");
+    try {
+      await axios.post(
+        `${CLIENT_API}/clients/${client_id}/profile`,
+        {
+          academy_name,
+          owner_name,
+          contact_email,
+          phone,
+          address: `${address_line1}, ${address_line2 ?? ""}`,
+          city,
+          state,
+          pincode,
+        },
+        {
+          headers: {
+            'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN!,
+          },
+        }
+      );
+
+      console.log("✅ Client profile created");
+
+    } catch (e: any) {
+      console.error(
+        "❌ Client profile creation failed:",
+        e?.response?.data || e.message
+      );
+
+      // 🔥 COMPENSATION (reverse order)
+      await axios.delete(`${CLIENT_API}/clients/${client_id}`, {
+        headers: { 'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN! },
+      });
+
+      await axios.delete(`${AUTH_API}/users/${authUserId}`, {
+        headers: { 'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN! },
+      });
+
+      throw new BadRequestException(
+        'Enrollment failed: unable to create client profile'
+      );
+    }
+
 
     // -----------------------------------------------------
-    // 8️⃣ Landing Page
+    // 6️⃣ Client Settings
     // -----------------------------------------------------
-    await axios.patch(`${CLIENT_API}/clients/${client_id}/landing-page`, {
-      client_id,
-      headline: `${academy_name} — Start Learning Today`,
-      subtitle: "Join thousands of learners",
-    });
-    console.log("✅ Client landing page created");
+    try {
+      await axios.patch(
+        `${CLIENT_API}/clients/${client_id}/settings`,
+        {
+          enable_chat: true,
+          enable_notifications: true,
+          enable_payment: true,
+          enable_landing_page: true,
+        },
+        {
+          headers: {
+            'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN!,
+          },
+        }
+      );
+
+      console.log("✅ Client settings updated");
+
+    } catch (e: any) {
+      console.error(
+        "❌ Client settings update failed:",
+        e?.response?.data || e.message
+      );
+
+      // 🔥 COMPENSATION (reverse order)
+      await axios.delete(`${CLIENT_API}/clients/${client_id}`, {
+        headers: { 'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN! },
+      });
+
+      await axios.delete(`${AUTH_API}/users/${authUserId}`, {
+        headers: { 'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN! },
+      });
+
+      throw new BadRequestException(
+        'Enrollment failed: unable to update client settings'
+      );
+    }
+
 
     // -----------------------------------------------------
-    // 9️⃣ Assign Plan
+    // 7️⃣ Client Branding
+    // -----------------------------------------------------
+    try {
+      await axios.patch(
+        `${CLIENT_API}/clients/${client_id}/branding`,
+        {
+          client_id,
+          theme_color: "#4F46E5",
+          primary_color: "#4F46E5",
+          secondary_color: "#818CF8",
+          theme_mode: "light",
+          font_family: "NA",
+        },
+        {
+          headers: {
+            'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN!,
+          },
+        }
+      );
+
+      console.log("✅ Client branding set");
+
+    } catch (e: any) {
+      console.error(
+        "❌ Client branding failed:",
+        e?.response?.data || e.message
+      );
+
+      // 🔥 COMPENSATION (ROOT AGGREGATES ONLY)
+      await axios.delete(`${CLIENT_API}/clients/${client_id}`, {
+        headers: { 'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN! },
+      });
+
+      await axios.delete(`${AUTH_API}/users/${authUserId}`, {
+        headers: { 'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN! },
+      });
+
+      throw new BadRequestException(
+        'Enrollment failed: unable to apply client branding'
+      );
+    }
+
+
+    // -----------------------------------------------------
+    // 8️⃣ Client Landing Page
+    // -----------------------------------------------------
+    try {
+      await axios.patch(
+        `${CLIENT_API}/clients/${client_id}/landing-page`,
+        {
+          client_id,
+          headline: `${academy_name} — Start Learning Today`,
+          subtitle: "Join thousands of learners",
+        },
+        {
+          headers: {
+            'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN!,
+          },
+        }
+      );
+
+      console.log("✅ Client landing page created");
+
+    } catch (e: any) {
+      console.error(
+        "❌ Client landing page creation failed:",
+        e?.response?.data || e.message
+      );
+
+      // 🔥 COMPENSATION (ROOT AGGREGATES ONLY)
+      await axios.delete(`${CLIENT_API}/clients/${client_id}`, {
+        headers: { 'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN! },
+      });
+
+      await axios.delete(`${AUTH_API}/users/${authUserId}`, {
+        headers: { 'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN! },
+      });
+
+      throw new BadRequestException(
+        'Enrollment failed: unable to create landing page'
+      );
+    }
+
+
+    // -----------------------------------------------------
+    // 9️⃣ Assign Subscription / Plan
     // -----------------------------------------------------
     interface SubscriptionAssignResponse {
       id: number;
@@ -241,59 +508,95 @@ export class EnrollmentInvitesService {
       created_at: string;
     }
 
-    const subscriptionRes = await axios.post<SubscriptionAssignResponse>(
-      `${SUPERADMIN_API}/subscriptions/assign`,
-      {
-        client_id,
-        plan_id,
-        renew_type: "monthly",
-      },
-      {
-        headers: {
-          "x-internal-secret": process.env.SUPER_ADMIN_INTERNAL_ADMIN_TOKEN!,
+    let subscription_id: number;
+
+    try {
+      const subscriptionRes = await axios.post<SubscriptionAssignResponse>(
+        `${SUPERADMIN_API}/subscriptions/assign`,
+        {
+          client_id,
+          plan_id,
+          renew_type: "monthly",
         },
-      }
-    );
+        {
+          headers: {
+            "x-internal-secret": process.env.SUPER_ADMIN_INTERNAL_ADMIN_TOKEN!,
+          },
+        }
+      );
 
-    const subscription_id = subscriptionRes.data.id;
-    console.log("✅ Subscription assigned with ID:", subscription_id);
+      subscription_id = subscriptionRes.data.id;
+      console.log("✅ Subscription assigned with ID:", subscription_id);
 
+    } catch (e: any) {
+      console.error(
+        "❌ Subscription assignment failed:",
+        e?.response?.data || e.message
+      );
+
+      // 🔥 COMPENSATION (ROOT AGGREGATES ONLY)
+      await axios.delete(`${CLIENT_API}/clients/${client_id}`, {
+        headers: { 'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN! },
+      });
+
+      await axios.delete(`${AUTH_API}/users/${authUserId}`, {
+        headers: { 'x-internal-secret': process.env.INTERNAL_ADMIN_TOKEN! },
+      });
+
+      throw new BadRequestException(
+        'Enrollment failed: unable to assign subscription'
+      );
+    }
 
     // -----------------------------------------------------
-    // 🔟 Save basic enrollment record
+    // 🔟 Save basic enrollment record (NON-CRITICAL)
     // -----------------------------------------------------
     const amount = 12990;
 
-    await this.dataSource.query(
-      `
-        INSERT INTO public.enrollments (
-          client_id, plan_id, plan_name, billing_type,
-          full_name, email, phone, billing_name,
-          address_line, city, state, pincode,
-          gst_no, pan_no, amount, payment_mode, payment_status
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-      `,
-      [
-        client_id,
-        plan_id,
-        academy_name,
-        "annual",
-        owner_name,
-        contact_email,
-        phone,
-        billing_name || owner_name,
-        `${address_line1}, ${address_line2 ?? ""}`,
-        city,
-        state,
-        pincode,
-        gst_number,
-        pan_number,
-        amount,
-        "mock",
-        "success",
-      ]
-    );
-    console.log("✅ Enrollment record saved");
+    try {
+      await this.dataSource.query(
+        `
+          INSERT INTO public.enrollments (
+            client_id, plan_id, plan_name, billing_type,
+            full_name, email, phone, billing_name,
+            address_line, city, state, pincode,
+            gst_no, pan_no, amount, payment_mode, payment_status
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        `,
+        [
+          client_id,
+          plan_id,
+          academy_name,
+          "annual",
+          owner_name,
+          contact_email,
+          phone,
+          billing_name || owner_name,
+          `${address_line1}, ${address_line2 ?? ""}`,
+          city,
+          state,
+          pincode,
+          gst_number,
+          pan_number,
+          amount,
+          "mock",
+          "success",
+        ]
+      );
+
+      console.log("✅ Enrollment record saved");
+
+    } catch (e: any) {
+      console.error(
+        "⚠️ Failed to save enrollment record:",
+        e?.message || e
+      );
+
+      // ❗ DO NOT ROLLBACK CLIENT / AUTH HERE
+      // This is an audit record and can be repaired later
+    }
+
+    
     // -----------------------------------------------------
     // 1️⃣2️⃣ Generate Invoice Number
     // -----------------------------------------------------
@@ -485,7 +788,7 @@ export class EnrollmentInvitesService {
   // -------------------------------------------------
   // WHATSAPP SENDER (Stub – Ready for WhatsApp Cloud API)
   // -------------------------------------------------
-  async sendWhatsApp(number: string, link: string) {
+/*   async sendWhatsApp(number: string, link: string) {
     console.log("📱 Sending WhatsApp Message");
     console.log("To:", number);
     console.log("Link:", link);
@@ -493,5 +796,49 @@ export class EnrollmentInvitesService {
     // 👉 Replace with:
     // - Meta WhatsApp Cloud API
     // - Twilio WhatsApp
+  } */
+
+  async sendWhatsApp(number: string, link: string) {
+      try {
+        const phone = number.startsWith("91") ? number : `91${number}`;
+
+        const url = `https://graph.facebook.com/v22.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+
+        await axios.post(
+          url,
+          {
+            messaging_product: "whatsapp",
+            to: phone,
+            type: "text",
+            text: {
+              body: `👋 Welcome to Karpi LMS!
+
+    Your enrollment form is ready.
+
+    📝 Complete your registration here:
+    ${link}
+
+    If you need help, reply to this message.
+
+    — Team Karpi 🚀`,
+            },
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        console.log("✅ WhatsApp message sent to", phone);
+
+      } catch (error: any) {
+        console.error(
+          "❌ WhatsApp send failed:",
+          error?.response?.data || error.message
+        );
+      }
   }
+
 }
