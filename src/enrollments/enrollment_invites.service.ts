@@ -7,7 +7,7 @@ import { randomBytes, UUID } from "crypto";
 import { SubmitEnrollmentDto } from "./dto/submit-enrollment.dto";
 import { DataSource } from "typeorm";
 import axios from "axios";
-import { transporter } from "./email";
+import { getEmailTransporter } from "./email";
 import * as fs from "fs";
 import * as path from "path";
 import * as nodemailer from "nodemailer";
@@ -707,19 +707,20 @@ export class EnrollmentInvitesService {
       .replace(/{{year}}/g, new Date().getFullYear().toString());
       
       // 2️⃣ Send email using shared transporter
+      const transporter = getEmailTransporter();
+
       const info = await transporter.sendMail({
         from: process.env.FROM_EMAIL,
         to: email,
         subject: "Your Karpi Enrollment Form",
         html,
       });
-
       console.log("📧 Email Sent:", info.messageId);
       console.log("Using Transporter:", transporter.options);
 
     } catch (error) {
       console.error("❌ Email Send Error:", error);
-      console.log("Using Transporter:", transporter.options);
+     // console.log("Using Transporter:", transporter.options);
     }
   }
 
@@ -771,6 +772,8 @@ export class EnrollmentInvitesService {
           .replace(/{{YEAR}}/g, new Date().getFullYear().toString());
 
         // 3️⃣ Send invoice email
+
+        const transporter = getEmailTransporter();
         const info = await transporter.sendMail({
           from: process.env.FROM_EMAIL,
           to: email,
