@@ -24,8 +24,8 @@ RUN npm install --omit=dev --legacy-peer-deps
 COPY --from=builder /app/dist ./dist
 
 # Optional: if you use prisma
-COPY --from=builder /app/prisma ./prisma
+#COPY --from=builder /app/prisma ./prisma
 
-EXPOSE 4100
+EXPOSE 4102
 
 CMD ["node", "dist/main.js"]
