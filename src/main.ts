@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { transporter } from './enrollments/email';  // ✅ IMPORT HERE
+import { getEmailTransporter } from './enrollments/email';  // ✅ IMPORT HERE
 import { Logger } from '@nestjs/common';
 
 async function bootstrap() {
@@ -20,6 +20,7 @@ async function bootstrap() {
   });
 
   // ✅ TEST SMTP CONNECTION HERE
+  const transporter = getEmailTransporter();
   transporter.verify((error, success) => {
     if (error) {
       console.error("❌ SMTP Connection Error:", error);

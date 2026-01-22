@@ -1,4 +1,4 @@
-import { transporter } from "../enrollments/email";
+import { getEmailTransporter } from "../enrollments/email";
 import * as fs from "fs";
 
 export async function sendInvoiceEmail({
@@ -12,6 +12,7 @@ export async function sendInvoiceEmail({
   html: string;
   pdfPath: string;
 }) {
+  const transporter = getEmailTransporter();
   return transporter.sendMail({
     from: process.env.FROM_EMAIL,
     to,
