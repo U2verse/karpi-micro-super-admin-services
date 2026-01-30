@@ -17,6 +17,13 @@ export const AppDataSource = new DataSource({
   password: String(process.env.POSTGRES_PASSWORD), // ✅ STRING GUARANTEED
   database: String(process.env.POSTGRES_DB),
 
+  // ✅ REQUIRED FOR AWS RDS
+  ssl:
+    process.env.SSL_MODE === 'require'
+      ? { rejectUnauthorized: false }
+      : false,
+
+
   entities: [
     Plan,
     ClientPlanSubscription,
@@ -26,6 +33,6 @@ export const AppDataSource = new DataSource({
     ClientUsageHistory,
     EnrollmentInvite,
   ],
-  migrations: [__dirname + '/../migrations/*.{ts,js}'],
+  migrations: [__dirname + '/../migrations/baseline/*.{ts,js}'],
   synchronize: false,
 });

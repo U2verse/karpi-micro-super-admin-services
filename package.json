@@ -1,25 +1,22 @@
 {
 
     "scripts": {
-
         "start": "nest start",
-
         "start:dev": "nest start --watch",
-
         "build": "nest build",
-
         "start:prod": "node dist/main.js",
 
         "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js --dataSource src/config/typeorm.config.ts",
 
         "typeorm:migration:generate": "npm run typeorm -- migration:generate",
-
         "typeorm:migration:run": "npm run typeorm -- migration:run",
-
         "typeorm:migration:revert": "npm run typeorm -- migration:revert",
 
-        "copy:templates": "copyfiles -u 1 src/email-templates/* dist/email-templates"
+        "typeorm:prod": "node ./node_modules/typeorm/cli.js --dataSource dist/config/typeorm.config.js",
+        "migration:run:prod": "npm run typeorm:prod -- migration:run",
+        "migration:revert:prod": "npm run typeorm:prod -- migration:revert",
 
+        "copy:templates": "copyfiles -u 1 src/email-templates/* dist/email-templates"
     },
 
     "dependencies": {
